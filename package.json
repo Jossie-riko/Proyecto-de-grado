@@ -2,8 +2,9 @@
   "name": "proyecto",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
+    "start": "electron .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,5 +12,9 @@
   "license": "ISC",
   "devDependencies": {
     "electron": "^44.3.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "bootstrap": "^5.3.8"
   }
 }

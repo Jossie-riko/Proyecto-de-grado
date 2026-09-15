@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TexClean - Panel Administrador</title>
+  <link rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.min.css">
+  <style>
+    body { background-color: #284F8F; }
+    .card-custom {
+      background-color: #1a335d;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body class="text-white">
+
+  <nav class="navbar navbar-dark px-4 border-bottom border-white-50" style="background-color: #1a335d;">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1 fw-bold">🧺 TexClean - Administrador General</span>
+      <div class="d-flex align-items-center gap-3">
+        <span id="userInfo" class="badge bg-primary fs-6">Admin</span>
+        <button id="btnLogout" class="btn btn-outline-light btn-sm">Cerrar Sesión</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-5">
+    <div class="card card-custom p-4 text-center max-w-lg mx-auto">
+      <h2 id="welcomeTitle" class="fw-bold mb-2">¡Bienvenido Administrador!</h2>
+      <p class="text-white-50">Tienes control y visualización global de las sedes de Bogotá.</p>
+    </div>
+  </div>
+
+  <script src="node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Lectura desde sessionStorage
+    const usuarioGuardado = sessionStorage.getItem('usuarioSesion');
+
+    if (!usuarioGuardado) {
+      window.location.href = './login.html';
+    } else {
+      const usuario = JSON.parse(usuarioGuardado);
+      if (usuario.rol !== 'ADMINISTRADOR') {
+        window.location.href = './agencia.html';
+      } else {
+        document.getElementById('userInfo').textContent = `${usuario.nombre} (${usuario.rol})`;
+      }
+    }
+
+    // Cerrar Sesión manual limpiando sessionStorage
+    document.getElementById('btnLogout').addEventListener('click', () => {
+      sessionStorage.removeItem('usuarioSesion');
+      window.location.href = './login.html';
+    });
+  </script>
+</body>
+</html>

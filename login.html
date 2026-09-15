@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TexClean - Iniciar Sesión</title>
+  <link rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.min.css">
+  <style>
+    html, body { height: 100%; }
+    body {
+      display: flex;
+      align-items: center;
+      padding-top: 40px;
+      padding-bottom: 40px;
+      background-color: #284F8F;
+    }
+    .form-signin {
+      max-width: 350px;
+      padding: 2rem 1.5rem;
+      background-color: #1a335d;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <main class="form-signin w-100 m-auto text-center">
+    <form id="loginForm">
+      <div class="mb-3"><span class="fs-1">🧺</span></div>
+      <h1 class="h3 mb-1 fw-bold text-white">TexClean</h1>
+      <p class="text-white-50 fs-7 mb-4">Bogotá - Sistema de Gestión</p>
+
+      <div id="alertError" class="alert alert-danger d-none py-2 fs-7 mb-3" role="alert"></div>
+      <div id="alertSuccess" class="alert alert-success d-none py-2 fs-7 mb-3" role="alert"></div>
+
+      <div class="form-floating text-start mb-2">
+        <input type="email" class="form-control" id="emailInput" placeholder="nombre@ejemplo.com" required>
+        <label for="emailInput">Correo electrónico</label>
+      </div>
+      
+      <div class="form-floating text-start mb-3">
+        <input type="password" class="form-control" id="passwordInput" placeholder="Contraseña" required>
+        <label for="passwordInput">Contraseña</label>
+      </div>
+
+      <button id="btnLogin" class="btn btn-primary w-100 py-2 mt-2" type="submit">Ingresar</button>
+      <p class="mt-4 mb-0 text-white-50 small">&copy; TexClean 2026</p>
+    </form>
+  </main>
+
+  <script src="node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const supabase = require('./supabaseClient');
+
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const alertError = document.getElementById('alertError');
+      const alertSuccess = document.getElementById('alertSuccess');
+      const btnLogin = document.getElementById('btnLogin');
+
+      alertError.classList.add('d-none');
+      alertSuccess.classList.add('d-none');
+      btnLogin.disabled = true;
+      btnLogin.textContent = 'Verificando...';
+
+      const correo = document.getElementById('emailInput').value.trim();
+      const clave = document.getElementById('passwordInput').value.trim();
+
+      try {
+        const { data: usuario, error } = await supabase
+          .from('usuarios')
+          .select('id, nombre, correo, rol, id_agencia, estado')
+          .eq('correo', correo)
+          .eq('clave', clave)
+          .single();
+
+        if (error || !usuario) {
+          alertError.textContent = 'Correo o contraseña incorrectos.';
+          alertError.classList.remove('d-none');
+          btnLogin.disabled = false;
+          btnLogin.textContent = 'Ingresar';
+          return;
+        }
+
+        if (!usuario.estado) {
+          alertError.textContent = 'Esta cuenta se encuentra inactiva.';
+          alertError.classList.remove('d-none');
+          btnLogin.disabled = false;
+          btnLogin.textContent = 'Ingresar';
+          return;
+        }
+
+        // Se guarda en sessionStorage para que se cierre al cerrar la ventana
+        sessionStorage.setItem('usuarioSesion', JSON.stringify(usuario));
+        alertSuccess.textContent = '¡Successful! Redirigiendo...';
+        alertSuccess.classList.remove('d-none');
+
+        setTimeout(() => {
+          if (usuario.rol === 'AGENCIA') {
+            window.location.href = './agencia.html';
+          } else {
+            window.location.href = './index.html';
+          }
+        }, 1200);
+
+      } catch (err) {
+        alertError.textContent = 'Ocurrió un error al conectar con el servidor.';
+        alertError.classList.remove('d-none');
+        btnLogin.disabled = false;
+        btnLogin.textContent = 'Ingresar';
+      }
+    });
+  </script>
+</body>
+</html>
