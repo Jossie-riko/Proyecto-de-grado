@@ -272,67 +272,124 @@
       alert.classList.remove('d-none');
     }
 
-    // Registrar Pedido
     document.getElementById('formPedido').addEventListener('submit', async (e) => {
       e.preventDefault();
       const alert = document.getElementById('alertPedido');
+      const btnSubmit = e.target.querySelector('button[type="submit"]');
 
-      const datosPedido = {
-        id_cliente: document.getElementById('selectCliente').value,
-        id_agencia: usuarioSesion.id_agencia,
-        id_usuario: usuarioSesion.id,
-        servicio: document.getElementById('pedServicio').value,
-        prenda_detalle: `${document.getElementById('pedCantidad').value}x ${document.getElementById('pedPrenda').value} (${document.getElementById('pedColor').value})`,
-        observaciones: document.getElementById('pedObs').value,
-        fecha_entrega: document.getElementById('pedFechaEntrega').value,
-        total: parseFloat(document.getElementById('pedTotal').value),
-        estado_pago: document.getElementById('pedEstadoPago').value,
-        estado: 'Recibido'
-      };
+      try {
+        btnSubmit.disabled = true;
 
-      const { error } = await supabase.from('pedidos').insert([datosPedido]);
-      if (!error) {
+        const datosPedido = {
+          id_cliente: parseInt(document.getElementById('selectCliente').value, 10),
+          id_agencia: usuarioSesion.id_agencia,
+          id_usuario: usuarioSesion.id,
+          total: parseFloat(document.getElementById('pedTotal').value),
+          estado_pago: document.getElementById('pedEstadoPago').value,
+          estado_pedido: 'Recibido',
+          fecha_entrega_estimada: document.getElementById('pedFechaEntrega').value
+        };
+
+        const { data: pedidoCreado, error: errorPedido } = await supabase
+          .from('pedidos')
+          .insert([datosPedido])
+          .select();
+
+        if (errorPedido) throw errorPedido;
+
+        const idPedidoGenerado = pedidoCreado[0].id;
+
+        const datosDetalle = {
+          id_pedido: idPedidoGenerado,
+          tipo_prenda: document.getElementById('pedPrenda').value,
+          color: document.getElementById('pedColor').value,
+          marca: null,
+          observaciones_estado: document.getElementById('pedObs').value,
+          servicio_solicitado: document.getElementById('pedServicio').value,
+          precio_unitario: parseFloat(document.getElementById('pedTotal').value)
+        };
+
+        const { error: errorDetalle } = await supabase
+          .from('detalle_pedidos')
+          .insert([datosDetalle]);
+
+        if (errorDetalle) throw errorDetalle;
+
         alert.className = 'alert alert-success py-2 fs-7';
-        alert.textContent = 'Orden registrada con éxito.';
+        alert.textContent = '¡Orden y prendas registradas con éxito!';
+        alert.classList.remove('d-none');
         document.getElementById('formPedido').reset();
-        cargarTablaPedidos();
-      } else {
-        alert.className = 'alert alert-danger py-2 fs-7';
-        alert.textContent = 'Error al registrar orden.';
-      }
-      alert.classList.remove('d-none');
-    });
 
-    // Cargar Flujo de Pedidos
+        cargarTablaPedidos();
+
+      } catch (err) {
+        console.error('Error al registrar la orden:', err);
+        alert.className = 'alert alert-danger py-2 fs-7';
+        alert.textContent = `Error al registrar orden: ${err.message || err}`;
+        alert.classList.remove('d-none');
+      } finally {
+        btnSubmit.disabled = false;
+      }
+    });
     async function cargarTablaPedidos() {
       const tbody = document.getElementById('tablaPedidos');
-      const { data: pedidos } = await supabase
+      if (!tbody) return;
+
+      const { data: pedidos, error } = await supabase
         .from('pedidos')
-        .select('*, clientes(nombre)')
+        .select(`
+          id,
+          total,
+          estado_pago,
+          estado_pedido,
+          fecha_entrega_estimada,
+          clientes ( nombre ),
+          detalle_pedidos (
+            tipo_prenda,
+            color,
+            servicio_solicitado
+          )
+        `)
         .eq('id_agencia', usuarioSesion.id_agencia)
         .order('id', { ascending: false });
 
-      tbody.innerHTML = '';
-      if (pedidos && pedidos.length > 0) {
-        pedidos.forEach(p => {
-          tbody.innerHTML += `
-            <tr>
-              <td>#${p.id}</td>
-              <td>${p.clientes ? p.clientes.nombre : 'N/A'}</td>
-              <td>${p.prenda_detalle} <br><small class="text-white-50">${p.observaciones || ''}</small></td>
-              <td>${p.servicio}</td>
-              <td>${p.fecha_entrega ? new Date(p.fecha_entrega).toLocaleString() : 'N/A'}</td>
-              <td>$${p.total} <br><span class="badge bg-secondary">${p.estado_pago}</span></td>
-              <td><span class="badge ${getBadgeColor(p.estado)}">${p.estado}</span></td>
-              <td>
-                <button onclick="cambiarEstado(${p.id}, '${p.estado}')" class="btn btn-warning btn-sm py-0">Avanzar Estado</button>
-              </td>
-            </tr>
-          `;
-        });
-      } else {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay prendas registradas.</td></tr>';
+      if (error) {
+        console.error('Error al cargar la tabla:', error);
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error al cargar pedidos.</td></tr>';
+        return;
       }
+
+      tbody.innerHTML = '';
+      if (!pedidos || pedidos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay prendas registradas.</td></tr>';
+        return;
+      }
+
+      pedidos.forEach(p => {
+        const detalle = p.detalle_pedidos?.[0] || {};
+        const clienteNombre = p.clientes?.nombre || 'Sin Cliente';
+        const detallePrenda = detalle.tipo_prenda
+          ? `${detalle.tipo_prenda} (${detalle.color || ''})`
+          : 'Sin detalle';
+        const servicio = detalle.servicio_solicitado || 'General';
+        const fechaEstimada = p.fecha_entrega_estimada
+          ? new Date(p.fecha_entrega_estimada).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
+          : 'N/A';
+        const estado = p.estado_pedido || 'Recibido';
+        const fila = document.createElement('tr');
+
+        fila.innerHTML = `
+          <td>#${p.id}</td>
+          <td>${clienteNombre}</td>
+          <td>${detallePrenda}</td>
+          <td>${servicio}</td>
+          <td>${fechaEstimada}</td>
+          <td>$${p.total} <br><span class="badge bg-secondary">${p.estado_pago || 'Pendiente'}</span></td>
+          <td><span class="badge ${getBadgeColor(estado)}">${estado}</span></td>
+          <td><button onclick="cambiarEstado(${p.id}, '${estado}')" class="btn btn-warning btn-sm py-0">Avanzar Estado</button></td>
+        `;
+        tbody.appendChild(fila);
+      });
     }
 
     // Cambiar Flujo de Estado
@@ -341,7 +398,7 @@
       if (estadoActual === 'En Lavado') nuevoEstado = 'Listo para Entrega';
       else if (estadoActual === 'Listo para Entrega') nuevoEstado = 'Entregado';
 
-      await supabase.from('pedidos').update({ estado: nuevoEstado }).eq('id', id);
+      await supabase.from('pedidos').update({ estado_pedido: nuevoEstado }).eq('id', id);
       cargarTablaPedidos();
     }
 
@@ -352,13 +409,13 @@
       return 'bg-secondary';
     }
 
-    // Cerrar Sesión
+    // Cerrar Sesion
     document.getElementById('btnLogout').addEventListener('click', () => {
       sessionStorage.removeItem('usuarioSesion');
       window.location.href = './login.html';
     });
 
-    // Inicializar
+    // Iniciar
     cargarClientes();
     cargarTablaPedidos();
   </script>
