@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="es" data-bs-theme="dark">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TexClean - Módulo Agencia</title>
-  <link rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
   <style>
     body { background-color: #284F8F; }
     .card-custom {
@@ -20,7 +20,7 @@
   <!-- Navbar -->
   <nav class="navbar navbar-dark px-4 border-bottom border-white-50" style="background-color: #1a335d;">
     <div class="container-fluid">
-      <span class="navbar-brand mb-0 h1 fw-bold">🧺 TexClean - Gestión de Agencia</span>
+      <span class="navbar-brand mb-0 h1 fw-bold"><img src="./Imagenes/Logo.svg" alt="TexClean" width="32" height="32" class="me-2">TexClean - Gestión de Agencia</span>
       <div class="d-flex align-items-center gap-3">
         <span id="txtUsuario" class="badge bg-primary fs-6">Operador</span>
         <button id="btnLogout" class="btn btn-outline-light btn-sm">Cerrar Sesión</button>
@@ -34,9 +34,8 @@
       <!-- 1. REGISTRO DE CLIENTES -->
       <div class="col-md-4">
         <div class="card card-custom p-3 text-white">
-          <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2">👤 Registro de Cliente</h5>
+          <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2"><img src="./Imagenes/usuario.svg" alt="" width="24" height="24" class="bg-white rounded-circle p-1 me-2" aria-hidden="true">Registro de Cliente</h5>
           <div id="alertCliente" class="alert d-none py-2 fs-7" role="alert"></div>
-
           <form id="formCliente">
             <div class="mb-2">
               <label class="form-label small">Nombre Completo</label>
@@ -82,7 +81,7 @@
       <!-- 2. REGISTRO DE PEDIDOS (ORDEN DE LAVADO) -->
       <div class="col-md-8">
         <div class="card card-custom p-3 text-white">
-          <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2">📝 Orden de Lavado (Nuevo Pedido)</h5>
+          <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2"><img src="./Imagenes/portapapeles.svg" alt="" width="24" height="24" class="bg-white rounded p-1 me-2" aria-hidden="true">Orden de Lavado (Nuevo Pedido)</h5>
           <div id="alertPedido" class="alert d-none py-2 fs-7" role="alert"></div>
 
           <form id="formPedido">
@@ -131,7 +130,7 @@
             <div class="row g-2 mb-3">
               <div class="col-md-6">
                 <label class="form-label small">Costo Total ($)</label>
-                <input type="number" id="pedTotal" class="form-control form-control-sm" min="0" required>
+                <input type="text" id="pedTotal" class="form-control form-control-sm" inputmode="numeric" placeholder="Ej: 50.000" required>
               </div>
               <div class="col-md-6">
                 <label class="form-label small">Estado de Pago</label>
@@ -151,23 +150,25 @@
       <!-- 3. FLUJO DE ESTADO DE LAS PRENDAS -->
       <div class="col-12">
         <div class="card card-custom p-3 text-white">
-          <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2">🔄 Control y Flujo de Prendas</h5>
+          <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2"><img src="./Imagenes/control-de-calidad.svg" alt="" width="24" height="24" class="bg-white rounded p-1 me-2" aria-hidden="true">Control y Flujo de Prendas</h5>
           <div class="table-responsive">
             <table class="table table-dark table-hover align-middle small">
               <thead>
                 <tr>
                   <th>ID</th>
                   <th>Cliente</th>
-                  <th>Detalle Prenda</th>
+                  <th>Tipo de Prenda</th>
+                  <th>Observaciones De Prenda</th>
                   <th>Servicio</th>
-                  <th>Entrega Est.</th>
+                  <th>Fecha de Ingreso</th>
+                  <th>Entrega Estipulada</th>
                   <th>Total / Pago</th>
                   <th>Estado Prenda</th>
                   <th>Acción</th>
                 </tr>
               </thead>
               <tbody id="tablaPedidos">
-                <tr><td colspan="8" class="text-center text-muted">Cargando pedidos...</td></tr>
+                <tr><td colspan="10" class="text-center text-muted">Cargando pedidos...</td></tr>
               </tbody>
             </table>
           </div>
@@ -177,22 +178,45 @@
     </div>
   </div>
 
-  <script src="node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-
-  <script>
-    const supabase = require('./supabaseClient');
+  <script type="module">
+    import { supabase } from './supabaseClient.js';
     const usuarioSesion = JSON.parse(sessionStorage.getItem('usuarioSesion'));
+    const campoTotal = document.getElementById('pedTotal');
+
+    campoTotal.addEventListener('input', () => {
+      const digitosAntesDelCursor = campoTotal.value
+        .slice(0, campoTotal.selectionStart)
+        .replace(/\D/g, '').length;
+      const valor = campoTotal.value.replace(/\D/g, '');
+      const valorFormateado = valor.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+      campoTotal.value = valorFormateado;
+
+      let posicionCursor = 0;
+      let digitosContados = 0;
+      while (posicionCursor < valorFormateado.length && digitosContados < digitosAntesDelCursor) {
+        if (/\d/.test(valorFormateado[posicionCursor])) digitosContados++;
+        posicionCursor++;
+      }
+      campoTotal.setSelectionRange(posicionCursor, posicionCursor);
+    });
 
     if (!usuarioSesion || usuarioSesion.rol !== 'AGENCIA') {
       window.location.href = './login.html';
-    }
-
-    document.getElementById('txtUsuario').textContent = `${usuarioSesion.nombre} (Agencia #${usuarioSesion.id_agencia})`;
+    } else {
+      document.getElementById('txtUsuario').textContent = `${usuarioSesion.nombre} (Agencia #${usuarioSesion.id_agencia})`;
 
     // Cargar Lista de Clientes usando la columna 'documento'
     async function cargarClientes() {
       const select = document.getElementById('selectCliente');
-      const { data: clientes } = await supabase.from('clientes').select('*').order('nombre');
+      const { data: clientes, error } = await supabase.from('clientes').select('*').order('nombre');
+
+      if (error) {
+        console.error('Error al cargar clientes:', error);
+        select.innerHTML = '<option value="">Error al cargar clientes</option>';
+        mostrarAlertaCliente(`Error al cargar clientes: ${error.message}`, 'danger');
+        return;
+      }
       
       select.innerHTML = '<option value="">-- Seleccionar --</option>';
       if (clientes) {
@@ -257,8 +281,8 @@
           cargarClientes();
         }
       } catch (err) {
-        console.error('Error de red/servidor:', err);
-        mostrarAlertaCliente('Error de conexión al registrar cliente.', 'danger');
+        console.error('Error de red/servidor al registrar cliente:', err);
+        mostrarAlertaCliente(`Error al registrar cliente: ${err.message || err}`, 'danger');
       } finally {
         btnSave.disabled = false;
         btnSave.textContent = 'Guardar Cliente';
@@ -279,15 +303,23 @@
 
       try {
         btnSubmit.disabled = true;
+        const totalPedido = Number(campoTotal.value.replace(/\./g, ''));
+        const fechaEntregaBogota = document.getElementById('pedFechaEntrega').value;
+        const fechaEntregaUTC = new Date(`${fechaEntregaBogota}:00-05:00`);
+
+        if (Number.isNaN(fechaEntregaUTC.getTime())) {
+          throw new Error('La fecha de entrega estipulada no es válida.');
+        }
 
         const datosPedido = {
           id_cliente: parseInt(document.getElementById('selectCliente').value, 10),
           id_agencia: usuarioSesion.id_agencia,
           id_usuario: usuarioSesion.id,
-          total: parseFloat(document.getElementById('pedTotal').value),
+          total: totalPedido,
           estado_pago: document.getElementById('pedEstadoPago').value,
           estado_pedido: 'Recibido',
-          fecha_entrega_estimada: document.getElementById('pedFechaEntrega').value
+          fecha_ingreso: new Date().toISOString(),
+          fecha_entrega_estimada: fechaEntregaUTC.toISOString()
         };
 
         const { data: pedidoCreado, error: errorPedido } = await supabase
@@ -306,7 +338,7 @@
           marca: null,
           observaciones_estado: document.getElementById('pedObs').value,
           servicio_solicitado: document.getElementById('pedServicio').value,
-          precio_unitario: parseFloat(document.getElementById('pedTotal').value)
+          precio_unitario: totalPedido
         };
 
         const { error: errorDetalle } = await supabase
@@ -342,11 +374,13 @@
           total,
           estado_pago,
           estado_pedido,
+          fecha_ingreso,
           fecha_entrega_estimada,
           clientes ( nombre ),
           detalle_pedidos (
             tipo_prenda,
             color,
+            observaciones_estado,
             servicio_solicitado
           )
         `)
@@ -355,13 +389,13 @@
 
       if (error) {
         console.error('Error al cargar la tabla:', error);
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error al cargar pedidos.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error al cargar pedidos.</td></tr>';
         return;
       }
 
       tbody.innerHTML = '';
       if (!pedidos || pedidos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay prendas registradas.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No hay prendas registradas.</td></tr>';
         return;
       }
 
@@ -371,9 +405,21 @@
         const detallePrenda = detalle.tipo_prenda
           ? `${detalle.tipo_prenda} (${detalle.color || ''})`
           : 'Sin detalle';
+        const observaciones = detalle.observaciones_estado || 'Sin observaciones';
         const servicio = detalle.servicio_solicitado || 'General';
+        const fechaIngreso = p.fecha_ingreso
+          ? new Date(p.fecha_ingreso).toLocaleString('es-CO', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+              timeZone: 'America/Bogota'
+            })
+          : 'N/A';
         const fechaEstimada = p.fecha_entrega_estimada
-          ? new Date(p.fecha_entrega_estimada).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
+          ? new Date(p.fecha_entrega_estimada).toLocaleString('es-CO', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+              timeZone: 'America/Bogota'
+            })
           : 'N/A';
         const estado = p.estado_pedido || 'Recibido';
         const fila = document.createElement('tr');
@@ -382,24 +428,41 @@
           <td>#${p.id}</td>
           <td>${clienteNombre}</td>
           <td>${detallePrenda}</td>
+          <td>${observaciones}</td>
           <td>${servicio}</td>
+          <td>${fechaIngreso}</td>
           <td>${fechaEstimada}</td>
           <td>$${p.total} <br><span class="badge bg-secondary">${p.estado_pago || 'Pendiente'}</span></td>
           <td><span class="badge ${getBadgeColor(estado)}">${estado}</span></td>
-          <td><button onclick="cambiarEstado(${p.id}, '${estado}')" class="btn btn-warning btn-sm py-0">Avanzar Estado</button></td>
+          <td><button type="button" class="btn btn-warning btn-sm py-0">Avanzar Estado</button></td>
         `;
+        fila.querySelector('button').addEventListener('click', () => cambiarEstado(p.id, estado));
         tbody.appendChild(fila);
       });
     }
 
     // Cambiar Flujo de Estado
     async function cambiarEstado(id, estadoActual) {
-      let nuevoEstado = 'En Lavado';
-      if (estadoActual === 'En Lavado') nuevoEstado = 'Listo para Entrega';
-      else if (estadoActual === 'Listo para Entrega') nuevoEstado = 'Entregado';
+      const estados = ['Recibido', 'En Lavado', 'Listo para Entrega'];
+      const indiceActual = estados.indexOf(estadoActual);
+      const nuevoEstado = estados[(indiceActual + 1) % estados.length];
 
-      await supabase.from('pedidos').update({ estado_pedido: nuevoEstado }).eq('id', id);
-      cargarTablaPedidos();
+      try {
+        const { error } = await supabase
+          .from('pedidos')
+          .update({ estado_pedido: nuevoEstado })
+          .eq('id', id);
+
+        if (error) throw error;
+
+        await cargarTablaPedidos();
+      } catch (err) {
+        console.error('Error al cambiar el estado del pedido:', err);
+        const alert = document.getElementById('alertPedido');
+        alert.className = 'alert alert-danger py-2 fs-7';
+        alert.textContent = `Error al cambiar el estado: ${err.message || err}`;
+        alert.classList.remove('d-none');
+      }
     }
 
     function getBadgeColor(estado) {
@@ -418,6 +481,7 @@
     // Iniciar
     cargarClientes();
     cargarTablaPedidos();
+    }
   </script>
 </body>
 </html>
