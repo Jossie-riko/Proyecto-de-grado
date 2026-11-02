@@ -13,6 +13,33 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
     }
+    /* Menú */
+    .menu-agencia { background-color: #142849; }
+    .menu-agencia .nav-link { color: #cfd8ea; font-weight: 600; border-radius: 8px; }
+    .menu-agencia .nav-link:hover { color: #fff; background-color: rgba(255,255,255,.08); }
+    .menu-agencia .nav-link.active { color: #fff; background-color: #0d6efd; }
+    /* Recibo */
+    #reciboOverlay { position: fixed; inset: 0; z-index: 2000; background: rgba(10,20,40,.75); overflow: auto; padding: 1rem; }
+    .recibo-barra { display: flex; gap: .5rem; justify-content: center; margin-bottom: .75rem; }
+    .recibo-estado { max-width: 380px; margin: 0 auto .75rem; }
+    .recibo-papel { background: #fff; color: #1b2430; max-width: 380px; margin: 0 auto; padding: 1.5rem 1.25rem; border-radius: 4px; font-size: .9rem; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+    .rc-head { text-align: center; margin-bottom: .75rem; }
+    .rc-marca { font-size: 1.5rem; font-weight: 800; color: #284F8F; }
+    .rc-small { font-size: .78rem; color: #5b6676; }
+    .rc-titulo { display: flex; justify-content: space-between; align-items: baseline; background: #284F8F; color: #fff; padding: .4rem .6rem; border-radius: 4px; margin-bottom: .5rem; }
+    .rc-fila { display: flex; justify-content: space-between; gap: .5rem; padding: .1rem 0; }
+    .rc-sep { border: 0; border-top: 1px dashed #9aa5b5; margin: .7rem 0; opacity: 1; }
+    .rc-bloque-titulo { font-weight: 700; color: #284F8F; margin-bottom: .25rem; }
+    .rc-item { padding: .35rem 0; border-bottom: 1px solid #e6eaf0; }
+    .rc-item-top { display: flex; justify-content: space-between; gap: .5rem; }
+    .rc-total { font-size: 1.15rem; }
+    .rc-nota { font-size: .75rem; color: #5b6676; text-align: center; margin: .5rem 0 0; }
+    @media print {
+      body > *:not(#reciboOverlay) { display: none !important; }
+      #reciboOverlay { position: static; background: #fff; padding: 0; overflow: visible; }
+      .recibo-barra, .recibo-estado { display: none !important; }
+      .recibo-papel { box-shadow: none; max-width: 80mm; padding: 0; }
+    }
   </style>
 </head>
 <body class="text-white">
@@ -28,9 +55,21 @@
     </div>
   </nav>
 
+  <!-- MENÚ: 3 opciones -->
+  <div class="menu-agencia px-4 py-2 border-bottom border-white-50">
+    <ul class="nav nav-pills gap-2" id="menuAgencia">
+      <li class="nav-item"><button type="button" class="nav-link active" data-vista="vistaRecibir">Recibir prendas</button></li>
+      <li class="nav-item"><button type="button" class="nav-link" data-vista="vistaSalida">Salida de prendas</button></li>
+      <li class="nav-item"><button type="button" class="nav-link" data-vista="vistaArqueo">Arqueo</button></li>
+    </ul>
+  </div>
+
   <div class="container-fluid p-4">
+
+    <!-- ========== VISTA 1: RECIBIR PRENDAS (todo lo que ya existía) ========== -->
+    <div id="vistaRecibir" class="vista">
     <div class="row g-4">
-      
+
       <!-- 1. REGISTRO DE CLIENTES -->
       <div class="col-md-4">
         <div class="card card-custom p-3 text-white">
@@ -43,26 +82,26 @@
             </div>
             <div class="mb-2">
               <label class="form-label small">Documento / Cédula (Solo números, máx 15)</label>
-              <input 
-                type="text" 
-                id="cliDocumento" 
-                class="form-control form-control-sm" 
-                maxlength="15" 
-                pattern="[0-9]+" 
+              <input
+                type="text"
+                id="cliDocumento"
+                class="form-control form-control-sm"
+                maxlength="15"
+                pattern="[0-9]+"
                 oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-                placeholder="Ej: 1012345678" 
+                placeholder="Ej: 1012345678"
                 required>
             </div>
             <div class="mb-2">
               <label class="form-label small">Teléfono (Solo números, máx 10)</label>
-              <input 
-                type="text" 
-                id="cliTelefono" 
-                class="form-control form-control-sm" 
-                maxlength="10" 
-                pattern="[0-9]+" 
+              <input
+                type="text"
+                id="cliTelefono"
+                class="form-control form-control-sm"
+                maxlength="10"
+                pattern="[0-9]+"
                 oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-                placeholder="Ej: 3001234567" 
+                placeholder="Ej: 3001234567"
                 required>
             </div>
             <div class="mb-2">
@@ -176,6 +215,90 @@
       </div>
 
     </div>
+    </div>
+
+    <!-- ========== VISTA 2: SALIDA DE PRENDAS ========== -->
+    <div id="vistaSalida" class="vista d-none">
+      <div class="card card-custom p-3 text-white">
+        <h5 class="fw-bold mb-1 border-bottom border-secondary pb-2">Salida de prendas</h5>
+        <p class="small text-white-50 mb-3">Pedidos listos para entregar al cliente. Al confirmar la entrega, el pedido pasa a «Entregado».</p>
+        <div id="alertSalida" class="alert d-none py-2 fs-7" role="alert"></div>
+        <div class="table-responsive">
+          <table class="table table-dark table-hover align-middle small">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Prenda</th>
+                <th>Servicio</th>
+                <th>Entrega Estipulada</th>
+                <th>Total / Pago</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tablaSalida">
+              <tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== VISTA 3: ARQUEO ========== -->
+    <div id="vistaArqueo" class="vista d-none">
+      <div class="card card-custom p-3 text-white">
+        <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3 gap-2">
+          <h5 class="fw-bold mb-0">Arqueo: entradas y salidas</h5>
+          <div class="d-flex align-items-center gap-2">
+            <label for="arqueoFecha" class="small mb-0">Fecha</label>
+            <input type="date" id="arqueoFecha" class="form-control form-control-sm" style="width:auto">
+          </div>
+        </div>
+        <div id="alertArqueo" class="alert d-none py-2 fs-7" role="alert"></div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <div class="p-3 rounded border border-success">
+              <div class="small text-white-50">Entradas (prendas recibidas)</div>
+              <div class="fs-3 fw-bold" id="arqEntCant">0</div>
+              <div class="small">Valor de los pedidos: <strong id="arqEntTotal">$0</strong></div>
+              <div class="small text-white-50" id="arqEntPago">Pagado $0 · Abonado $0 · Pendiente $0</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 rounded border border-warning">
+              <div class="small text-white-50">Salidas (prendas entregadas)</div>
+              <div class="fs-3 fw-bold" id="arqSalCant">0</div>
+              <div class="small">Valor de los pedidos: <strong id="arqSalTotal">$0</strong></div>
+              <div class="small text-white-50">Pedidos que salieron en la fecha elegida</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-dark table-hover align-middle small">
+            <thead>
+              <tr><th>Movimiento</th><th>Hora</th><th>ID</th><th>Cliente</th><th>Prenda</th><th>Total / Pago</th></tr>
+            </thead>
+            <tbody id="tablaArqueo">
+              <tr><td colspan="6" class="text-center text-muted">Selecciona una fecha.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RECIBO (vista previa, impresión y envío por correo) -->
+  <div id="reciboOverlay" class="d-none" role="dialog" aria-modal="true" aria-label="Recibo del pedido">
+    <div class="recibo-barra">
+      <button type="button" id="btnReciboImprimir" class="btn btn-light btn-sm">Imprimir</button>
+      <button type="button" id="btnReciboEnviar" class="btn btn-primary btn-sm">Enviar al correo</button>
+      <button type="button" id="btnReciboCerrar" class="btn btn-outline-light btn-sm">Cerrar</button>
+    </div>
+    <div id="reciboEstado" class="alert d-none py-2 small recibo-estado" role="status"></div>
+    <div id="reciboPapel" class="recibo-papel"></div>
   </div>
 
   <script type="module">
@@ -206,6 +329,138 @@
     } else {
       document.getElementById('txtUsuario').textContent = `${usuarioSesion.nombre} (Agencia #${usuarioSesion.id_agencia})`;
 
+    // ---------- Utilidades nuevas ----------
+    const fmtMoneda = (n) => '$' + Number(n || 0).toLocaleString('es-CO');
+    const fmtHora = (iso) => iso
+      ? new Date(iso).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Bogota' })
+      : 'N/A';
+    function mostrarAlerta(id, mensaje, tipo) {
+      const el = document.getElementById(id);
+      el.className = `alert alert-${tipo} py-2 fs-7`;
+      el.textContent = mensaje;
+      el.classList.remove('d-none');
+    }
+
+    // ---------- RECIBOS ----------
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let reciboActual = null;
+
+    async function obtenerPedidoCompleto(id) {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select(`
+          id, total, estado_pago, estado_pedido, fecha_ingreso, fecha_entrega_estimada, id_agencia,
+          clientes ( nombre, documento, telefono, correo ),
+          detalle_pedidos ( tipo_prenda, color, observaciones_estado, servicio_solicitado )
+        `)
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
+    function htmlRecibo(p) {
+      const c = p.clientes || {};
+      const prendas = (p.detalle_pedidos || []).map(d => `
+        <div class="rc-item">
+          <div class="rc-item-top"><strong>${esc(d.tipo_prenda)}</strong><span>${esc(d.color)}</span></div>
+          <div class="rc-small">${esc(d.servicio_solicitado)}</div>
+          ${d.observaciones_estado ? `<div class="rc-small">Estado al recibir: ${esc(d.observaciones_estado)}</div>` : ''}
+        </div>`).join('') || '<div class="rc-small">Sin detalle de prendas</div>';
+
+      return `
+        <div class="rc-head">
+          <img src="./Imagenes/Logo.svg" alt="" width="44" height="44">
+          <div class="rc-marca">TexClean</div>
+          <div class="rc-small">Bogotá · Agencia #${esc(p.id_agencia)}</div>
+        </div>
+        <div class="rc-titulo"><span>Recibo de recepción</span><strong>N° ${String(p.id).padStart(6, '0')}</strong></div>
+        <div class="rc-fila"><span>Fecha de ingreso</span><span>${fmtHora(p.fecha_ingreso)}</span></div>
+        <div class="rc-fila"><span>Entrega estimada</span><strong>${fmtHora(p.fecha_entrega_estimada)}</strong></div>
+        <hr class="rc-sep">
+        <div class="rc-bloque-titulo">Cliente</div>
+        <div>${esc(c.nombre)}</div>
+        <div class="rc-small">Documento: ${esc(c.documento)} · Teléfono: ${esc(c.telefono)}</div>
+        <hr class="rc-sep">
+        <div class="rc-bloque-titulo">Prendas recibidas</div>
+        ${prendas}
+        <hr class="rc-sep">
+        <div class="rc-fila rc-total"><span>Total</span><strong>${fmtMoneda(p.total)}</strong></div>
+        <div class="rc-fila"><span>Estado de pago</span><strong>${esc(p.estado_pago || 'Pendiente')}</strong></div>
+        <hr class="rc-sep">
+        <p class="rc-nota">Conserve este recibo: lo necesitará para retirar sus prendas.<br>Gracias por confiar en TexClean.</p>
+      `;
+    }
+
+    function estadoRecibo(mensaje, tipo) {
+      const el = document.getElementById('reciboEstado');
+      el.className = `alert alert-${tipo} py-2 small recibo-estado`;
+      el.textContent = mensaje;
+    }
+
+    async function abrirRecibo(id, autoEnviar = false) {
+      try {
+        const p = await obtenerPedidoCompleto(id);
+        reciboActual = p;
+        const correo = p.clientes?.correo;
+        document.getElementById('reciboPapel').innerHTML = htmlRecibo(p);
+        document.getElementById('btnReciboEnviar').disabled = !correo;
+        document.getElementById('reciboEstado').classList.add('d-none');
+        document.getElementById('reciboOverlay').classList.remove('d-none');
+
+        if (!correo) {
+          estadoRecibo('El cliente no tiene correo registrado. Puedes imprimir el recibo.', 'warning');
+        } else if (autoEnviar) {
+          await enviarRecibo();
+        }
+      } catch (err) {
+        console.error('Error al cargar el recibo:', err);
+        mostrarAlerta('alertPedido', `No se pudo cargar el recibo: ${err.message || err}`, 'danger');
+      }
+    }
+
+    async function enviarRecibo() {
+      if (!reciboActual) return;
+      const btn = document.getElementById('btnReciboEnviar');
+      const correo = reciboActual.clientes?.correo;
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      estadoRecibo(`Enviando recibo a ${correo}...`, 'info');
+
+      try {
+        const { data, error } = await supabase.functions.invoke('enviar-recibo', {
+          body: { id_pedido: reciboActual.id }
+        });
+        if (error) throw error;
+        if (!data?.ok) throw new Error(data?.error || 'No se pudo enviar el correo.');
+        estadoRecibo(`Recibo enviado a ${correo}.`, 'success');
+      } catch (err) {
+        console.error('Error al enviar el recibo:', err);
+        estadoRecibo(`No se pudo enviar el correo: ${err.message || err}`, 'danger');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar al correo';
+      }
+    }
+
+    document.getElementById('btnReciboImprimir').addEventListener('click', () => window.print());
+    document.getElementById('btnReciboEnviar').addEventListener('click', enviarRecibo);
+    document.getElementById('btnReciboCerrar').addEventListener('click', () => {
+      document.getElementById('reciboOverlay').classList.add('d-none');
+    });
+
+    // ---------- Menú ----------
+    document.querySelectorAll('#menuAgencia .nav-link').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#menuAgencia .nav-link').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.vista').forEach(v => v.classList.add('d-none'));
+        document.getElementById(btn.dataset.vista).classList.remove('d-none');
+        if (btn.dataset.vista === 'vistaSalida') cargarTablaSalida();
+        if (btn.dataset.vista === 'vistaArqueo') cargarArqueo();
+      });
+    });
+
     // Cargar Lista de Clientes usando la columna 'documento'
     async function cargarClientes() {
       const select = document.getElementById('selectCliente');
@@ -217,7 +472,7 @@
         mostrarAlertaCliente(`Error al cargar clientes: ${error.message}`, 'danger');
         return;
       }
-      
+
       select.innerHTML = '<option value="">-- Seleccionar --</option>';
       if (clientes) {
         clientes.forEach(c => {
@@ -229,10 +484,10 @@
     // Registrar Cliente con campos exactos de tu Supabase
     document.getElementById('formCliente').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const alert = document.getElementById('alertCliente');
       const btnSave = document.getElementById('btnSaveCliente');
-      
+
       alert.classList.add('d-none');
       btnSave.disabled = true;
       btnSave.textContent = 'Guardando...';
@@ -353,6 +608,7 @@
         document.getElementById('formPedido').reset();
 
         cargarTablaPedidos();
+        abrirRecibo(idPedidoGenerado, true);
 
       } catch (err) {
         console.error('Error al registrar la orden:', err);
@@ -424,6 +680,11 @@
         const estado = p.estado_pedido || 'Recibido';
         const fila = document.createElement('tr');
 
+        // Los pedidos ya entregados no vuelven a entrar al ciclo de estados
+        const accion = estado === 'Entregado'
+          ? '<span class="text-white-50">Entregado</span>'
+          : '<button type="button" class="btn btn-warning btn-sm py-0 btn-avanzar">Avanzar Estado</button>';
+
         fila.innerHTML = `
           <td>#${p.id}</td>
           <td>${clienteNombre}</td>
@@ -434,9 +695,11 @@
           <td>${fechaEstimada}</td>
           <td>$${p.total} <br><span class="badge bg-secondary">${p.estado_pago || 'Pendiente'}</span></td>
           <td><span class="badge ${getBadgeColor(estado)}">${estado}</span></td>
-          <td><button type="button" class="btn btn-warning btn-sm py-0">Avanzar Estado</button></td>
+          <td>${accion} <button type="button" class="btn btn-outline-light btn-sm py-0 btn-recibo">Recibo</button></td>
         `;
-        fila.querySelector('button').addEventListener('click', () => cambiarEstado(p.id, estado));
+        const btnAvanzar = fila.querySelector('.btn-avanzar');
+        if (btnAvanzar) btnAvanzar.addEventListener('click', () => cambiarEstado(p.id, estado));
+        fila.querySelector('.btn-recibo').addEventListener('click', () => abrirRecibo(p.id));
         tbody.appendChild(fila);
       });
     }
@@ -469,7 +732,151 @@
       if (estado === 'Recibido') return 'bg-danger';
       if (estado === 'En Lavado') return 'bg-warning text-dark';
       if (estado === 'Listo para Entrega') return 'bg-success';
+      if (estado === 'Entregado') return 'bg-info text-dark';
       return 'bg-secondary';
+    }
+
+    // ---------- SALIDA DE PRENDAS ----------
+    async function cargarTablaSalida() {
+      const tbody = document.getElementById('tablaSalida');
+      const { data: pedidos, error } = await supabase
+        .from('pedidos')
+        .select(`
+          id, total, estado_pago, fecha_entrega_estimada,
+          clientes ( nombre ),
+          detalle_pedidos ( tipo_prenda, color, servicio_solicitado )
+        `)
+        .eq('id_agencia', usuarioSesion.id_agencia)
+        .eq('estado_pedido', 'Listo para Entrega')
+        .order('id', { ascending: true });
+
+      if (error) {
+        console.error('Error al cargar salidas:', error);
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error al cargar pedidos listos.</td></tr>';
+        return;
+      }
+      if (!pedidos || pedidos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay pedidos listos para entregar.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      pedidos.forEach(p => {
+        const d = p.detalle_pedidos?.[0] || {};
+        const fila = document.createElement('tr');
+        fila.innerHTML = `
+          <td>#${p.id}</td>
+          <td>${p.clientes?.nombre || 'Sin Cliente'}</td>
+          <td>${d.tipo_prenda ? `${d.tipo_prenda} (${d.color || ''})` : 'Sin detalle'}</td>
+          <td>${d.servicio_solicitado || 'General'}</td>
+          <td>${fmtHora(p.fecha_entrega_estimada)}</td>
+          <td>${fmtMoneda(p.total)} <br><span class="badge bg-secondary">${p.estado_pago || 'Pendiente'}</span></td>
+          <td><button type="button" class="btn btn-success btn-sm py-0">Entregar prendas</button></td>
+        `;
+        fila.querySelector('button').addEventListener('click', () => registrarSalida(p));
+        tbody.appendChild(fila);
+      });
+    }
+
+    async function registrarSalida(p) {
+      const aviso = p.estado_pago !== 'Pagado'
+        ? `El pedido #${p.id} tiene pago «${p.estado_pago || 'Pendiente'}». ¿Entregar de todas formas?`
+        : `¿Confirmar la entrega del pedido #${p.id}?`;
+      if (!confirm(aviso)) return;
+
+      try {
+        const { error } = await supabase
+          .from('pedidos')
+          .update({ estado_pedido: 'Entregado', fecha_salida: new Date().toISOString() })
+          .eq('id', p.id);
+        if (error) throw error;
+
+        mostrarAlerta('alertSalida', `Pedido #${p.id} entregado con éxito.`, 'success');
+        await cargarTablaSalida();
+        await cargarTablaPedidos();
+      } catch (err) {
+        console.error('Error al registrar la salida:', err);
+        mostrarAlerta('alertSalida', `Error al registrar la salida: ${err.message || err}`, 'danger');
+      }
+    }
+
+    // ---------- ARQUEO ----------
+    const inputFechaArqueo = document.getElementById('arqueoFecha');
+    inputFechaArqueo.value = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    inputFechaArqueo.addEventListener('change', cargarArqueo);
+
+    async function cargarArqueo() {
+      const fecha = inputFechaArqueo.value;
+      if (!fecha) return;
+
+      // Rango del día en hora de Bogotá (UTC-5)
+      const inicio = new Date(`${fecha}T00:00:00-05:00`);
+      const fin = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+      const columnas = `
+        id, total, estado_pago, fecha_ingreso, fecha_salida,
+        clientes ( nombre ),
+        detalle_pedidos ( tipo_prenda, color )
+      `;
+
+      const [entradas, salidas] = await Promise.all([
+        supabase.from('pedidos').select(columnas)
+          .eq('id_agencia', usuarioSesion.id_agencia)
+          .gte('fecha_ingreso', inicio.toISOString())
+          .lt('fecha_ingreso', fin.toISOString())
+          .order('fecha_ingreso', { ascending: true }),
+        supabase.from('pedidos').select(columnas)
+          .eq('id_agencia', usuarioSesion.id_agencia)
+          .gte('fecha_salida', inicio.toISOString())
+          .lt('fecha_salida', fin.toISOString())
+          .order('fecha_salida', { ascending: true })
+      ]);
+
+      if (entradas.error || salidas.error) {
+        const err = entradas.error || salidas.error;
+        console.error('Error en el arqueo:', err);
+        mostrarAlerta('alertArqueo', `Error al calcular el arqueo: ${err.message}`, 'danger');
+        return;
+      }
+      document.getElementById('alertArqueo').classList.add('d-none');
+
+      const ent = entradas.data || [];
+      const sal = salidas.data || [];
+      const suma = (lista, filtro = () => true) =>
+        lista.filter(filtro).reduce((acc, p) => acc + Number(p.total || 0), 0);
+
+      document.getElementById('arqEntCant').textContent = ent.length;
+      document.getElementById('arqEntTotal').textContent = fmtMoneda(suma(ent));
+      document.getElementById('arqEntPago').textContent =
+        `Pagado ${fmtMoneda(suma(ent, p => p.estado_pago === 'Pagado'))} · ` +
+        `Abonado ${fmtMoneda(suma(ent, p => p.estado_pago === 'Abonado'))} · ` +
+        `Pendiente ${fmtMoneda(suma(ent, p => p.estado_pago === 'Pendiente'))}`;
+      document.getElementById('arqSalCant').textContent = sal.length;
+      document.getElementById('arqSalTotal').textContent = fmtMoneda(suma(sal));
+
+      const movimientos = [
+        ...ent.map(p => ({ tipo: 'Entrada', hora: p.fecha_ingreso, p })),
+        ...sal.map(p => ({ tipo: 'Salida', hora: p.fecha_salida, p }))
+      ].sort((a, b) => new Date(a.hora) - new Date(b.hora));
+
+      const tbody = document.getElementById('tablaArqueo');
+      if (movimientos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Sin movimientos en esta fecha.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = '';
+      movimientos.forEach(({ tipo, hora, p }) => {
+        const d = p.detalle_pedidos?.[0] || {};
+        const fila = document.createElement('tr');
+        fila.innerHTML = `
+          <td><span class="badge ${tipo === 'Entrada' ? 'bg-success' : 'bg-warning text-dark'}">${tipo}</span></td>
+          <td>${fmtHora(hora)}</td>
+          <td>#${p.id}</td>
+          <td>${p.clientes?.nombre || 'Sin Cliente'}</td>
+          <td>${d.tipo_prenda ? `${d.tipo_prenda} (${d.color || ''})` : 'Sin detalle'}</td>
+          <td>${fmtMoneda(p.total)} <br><span class="badge bg-secondary">${p.estado_pago || 'Pendiente'}</span></td>
+        `;
+        tbody.appendChild(fila);
+      });
     }
 
     // Cerrar Sesion
