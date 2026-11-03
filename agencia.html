@@ -227,26 +227,20 @@
     <div id="vistaSalida" class="vista d-none">
       <div class="card card-custom p-3 text-white">
         <h5 class="fw-bold mb-1 border-bottom border-secondary pb-2">Salida de prendas</h5>
-        <p class="small text-white-50 mb-3">Pedidos listos para entregar al cliente. Al confirmar la entrega, el pedido pasa a «Entregado».</p>
+        <p class="small text-white-50 mb-3">Escribe el número del recibo para buscar la orden y darle salida.</p>
         <div id="alertSalida" class="alert d-none py-2 fs-7" role="alert"></div>
-        <div class="table-responsive">
-          <table class="table table-dark table-hover align-middle small">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Cliente</th>
-                <th>Prenda</th>
-                <th>Servicio</th>
-                <th>Entrega Estipulada</th>
-                <th>Total / Pago</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody id="tablaSalida">
-              <tr><td colspan="7" class="text-center text-muted">Cargando...</td></tr>
-            </tbody>
-          </table>
-        </div>
+
+        <form id="formBuscarSalida" class="row g-2 align-items-end mb-3">
+          <div class="col-sm-6 col-md-4">
+            <label for="salidaNumero" class="form-label small">Número del recibo</label>
+            <input type="text" id="salidaNumero" class="form-control form-control-sm" inputmode="numeric" maxlength="9" placeholder="Ej: 123" required>
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-primary btn-sm fw-bold">Buscar orden</button>
+          </div>
+        </form>
+
+        <div id="resultadoSalida" class="d-none"></div>
       </div>
     </div>
 
@@ -506,7 +500,7 @@
         btn.classList.add('active');
         document.querySelectorAll('.vista').forEach(v => v.classList.add('d-none'));
         document.getElementById(btn.dataset.vista).classList.remove('d-none');
-        if (btn.dataset.vista === 'vistaSalida') cargarTablaSalida();
+        if (btn.dataset.vista === 'vistaSalida') limpiarSalida();
         if (btn.dataset.vista === 'vistaArqueo') cargarArqueo();
       });
     });
@@ -799,67 +793,129 @@
       return 'bg-secondary';
     }
 
-    // ---------- SALIDA DE PRENDAS ----------
-    async function cargarTablaSalida() {
-      const tbody = document.getElementById('tablaSalida');
-      const { data: pedidos, error } = await supabase
-        .from('pedidos')
-        .select(`
-          id, total, estado_pago, fecha_entrega_estimada,
-          clientes ( nombre ),
-          detalle_pedidos ( tipo_prenda, color, servicio_solicitado )
-        `)
-        .eq('id_agencia', usuarioSesion.id_agencia)
-        .eq('estado_pedido', 'Listo para Entrega')
-        .order('id', { ascending: true });
-
-      if (error) {
-        console.error('Error al cargar salidas:', error);
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error al cargar pedidos listos.</td></tr>';
-        return;
-      }
-      if (!pedidos || pedidos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay pedidos listos para entregar.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = '';
-      pedidos.forEach(p => {
-        const d = p.detalle_pedidos?.[0] || {};
-        const fila = document.createElement('tr');
-        fila.innerHTML = `
-          <td>#${p.id}</td>
-          <td>${p.clientes?.nombre || 'Sin Cliente'}</td>
-          <td>${d.tipo_prenda ? `${d.tipo_prenda} (${d.color || ''})` : 'Sin detalle'}</td>
-          <td>${d.servicio_solicitado || 'General'}</td>
-          <td>${fmtHora(p.fecha_entrega_estimada)}</td>
-          <td>${fmtMoneda(p.total)} <br><span class="badge bg-secondary">${p.estado_pago || 'Pendiente'}</span></td>
-          <td><button type="button" class="btn btn-success btn-sm py-0">Entregar prendas</button></td>
-        `;
-        fila.querySelector('button').addEventListener('click', () => registrarSalida(p));
-        tbody.appendChild(fila);
-      });
+    // ---------- SALIDA DE PRENDAS (por número de recibo) ----------
+    function limpiarSalida() {
+      document.getElementById('formBuscarSalida').reset();
+      const cont = document.getElementById('resultadoSalida');
+      cont.classList.add('d-none');
+      cont.innerHTML = '';
+      document.getElementById('alertSalida').classList.add('d-none');
+      document.getElementById('salidaNumero').focus();
     }
 
-    async function registrarSalida(p) {
-      const aviso = p.estado_pago !== 'Pagado'
-        ? `El pedido #${p.id} tiene pago «${p.estado_pago || 'Pendiente'}». ¿Entregar de todas formas?`
-        : `¿Confirmar la entrega del pedido #${p.id}?`;
-      if (!confirm(aviso)) return;
+    document.getElementById('salidaNumero').addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/\D/g, '');
+    });
+
+    document.getElementById('formBuscarSalida').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cont = document.getElementById('resultadoSalida');
+      cont.classList.add('d-none');
+      cont.innerHTML = '';
+
+      const numero = parseInt(document.getElementById('salidaNumero').value, 10);
+      if (!numero) {
+        mostrarAlerta('alertSalida', 'Escribe el número del recibo.', 'warning');
+        return;
+      }
 
       try {
-        const { error } = await supabase
+        const { data: p, error } = await supabase
           .from('pedidos')
-          .update({ estado_pedido: 'Entregado', fecha_salida: new Date().toISOString() })
-          .eq('id', p.id);
+          .select(`
+            id, total, abono, estado_pago, estado_pedido, fecha_ingreso, fecha_entrega_estimada, fecha_salida,
+            clientes ( nombre, documento ),
+            detalle_pedidos ( tipo_prenda, color, observaciones_estado, servicio_solicitado )
+          `)
+          .eq('id', numero)
+          .eq('id_agencia', usuarioSesion.id_agencia)
+          .maybeSingle();
         if (error) throw error;
 
-        mostrarAlerta('alertSalida', `Pedido #${p.id} entregado con éxito.`, 'success');
-        await cargarTablaSalida();
+        if (!p) {
+          mostrarAlerta('alertSalida', `No se encontró el recibo N° ${String(numero).padStart(6, '0')} en esta agencia.`, 'danger');
+          return;
+        }
+        mostrarOrdenSalida(p);
+      } catch (err) {
+        console.error('Error al buscar la orden:', err);
+        mostrarAlerta('alertSalida', `Error al buscar la orden: ${err.message || err}`, 'danger');
+      }
+    });
+
+    function mostrarOrdenSalida(p) {
+      const cont = document.getElementById('resultadoSalida');
+      const d = p.detalle_pedidos?.[0] || {};
+      const estado = p.estado_pedido || 'Recibido';
+      const saldo = p.estado_pago === 'Pagado'
+        ? 0
+        : p.estado_pago === 'Abonado'
+          ? Number(p.total) - Number(p.abono || 0)
+          : Number(p.total);
+
+      let accion;
+      if (estado === 'Entregado') {
+        accion = `<div class="alert alert-info py-2 mb-0">Esta orden ya fue entregada${p.fecha_salida ? ' el ' + fmtHora(p.fecha_salida) : ''}.</div>`;
+      } else if (estado !== 'Listo para Entrega') {
+        accion = `<div class="alert alert-warning py-2 mb-0">Esta orden todavía no está lista para entregar (estado actual: ${esc(estado)}). Avanza su estado en «Recibir prendas» y vuelve a buscarla.</div>`;
+      } else {
+        accion = `
+          ${saldo > 0 ? `<div class="alert alert-warning py-2">El cliente debe ${fmtMoneda(saldo)} de esta orden.</div>` : ''}
+          <p class="fw-bold mb-2">¿Quieres darle salida a esta orden?</p>
+          <div class="d-flex gap-2">
+            <button type="button" id="btnConfirmarSalida" class="btn btn-success btn-sm fw-bold">Sí, dar salida</button>
+            <button type="button" id="btnCancelarSalida" class="btn btn-outline-light btn-sm">Cancelar</button>
+          </div>`;
+      }
+
+      cont.innerHTML = `
+        <div class="p-3 rounded border border-secondary">
+          <div class="d-flex justify-content-between flex-wrap gap-2 mb-2">
+            <strong>Recibo N° ${String(p.id).padStart(6, '0')}</strong>
+            <span class="badge ${getBadgeColor(estado)}">${esc(estado)}</span>
+          </div>
+          <div class="small">
+            <div><span class="text-white-50">Cliente:</span> ${esc(p.clientes?.nombre || 'Sin Cliente')} (Doc: ${esc(p.clientes?.documento || 'N/A')})</div>
+            <div><span class="text-white-50">Prenda:</span> ${d.tipo_prenda ? esc(d.tipo_prenda) + ' (' + esc(d.color || '') + ')' : 'Sin detalle'} · ${esc(d.servicio_solicitado || 'General')}</div>
+            ${d.observaciones_estado ? `<div><span class="text-white-50">Observaciones:</span> ${esc(d.observaciones_estado)}</div>` : ''}
+            <div><span class="text-white-50">Ingreso:</span> ${fmtHora(p.fecha_ingreso)} · <span class="text-white-50">Entrega estimada:</span> ${fmtHora(p.fecha_entrega_estimada)}</div>
+            <div><span class="text-white-50">Total:</span> ${fmtMoneda(p.total)} <span class="badge bg-secondary">${esc(p.estado_pago || 'Pendiente')}</span>${p.estado_pago === 'Abonado' ? ` · Abonó ${fmtMoneda(p.abono)}` : ''}</div>
+          </div>
+          <hr class="border-secondary">
+          ${accion}
+        </div>`;
+      cont.classList.remove('d-none');
+
+      const btnOk = document.getElementById('btnConfirmarSalida');
+      if (btnOk) {
+        btnOk.addEventListener('click', () => registrarSalida(p, btnOk));
+        document.getElementById('btnCancelarSalida').addEventListener('click', limpiarSalida);
+      }
+    }
+
+    async function registrarSalida(p, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Registrando...';
+      try {
+        const { data, error } = await supabase
+          .from('pedidos')
+          .update({ estado_pedido: 'Entregado', fecha_salida: new Date().toISOString() })
+          .eq('id', p.id)
+          .eq('estado_pedido', 'Listo para Entrega')
+          .select();
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error('La orden cambió de estado. Búscala de nuevo.');
+        }
+
+        limpiarSalida();
+        mostrarAlerta('alertSalida', `Orden N° ${String(p.id).padStart(6, '0')} entregada con éxito.`, 'success');
         await cargarTablaPedidos();
       } catch (err) {
         console.error('Error al registrar la salida:', err);
         mostrarAlerta('alertSalida', `Error al registrar la salida: ${err.message || err}`, 'danger');
+        btn.disabled = false;
+        btn.textContent = 'Sí, dar salida';
       }
     }
 
