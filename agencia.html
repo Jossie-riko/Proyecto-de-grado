@@ -182,9 +182,10 @@
               </div>
             </div>
 
-            <div id="grupoMetodo" class="mb-2 d-none">
+            <div id="grupoMetodo" class="mb-2">
               <label class="form-label small">Medio de pago</label>
               <select id="pedMetodoPago" class="form-select form-select-sm">
+                <option value="">-- Seleccionar --</option>
                 <option value="Efectivo">Efectivo</option>
                 <option value="Transferencia">Transferencia</option>
                 <option value="Tarjeta">Tarjeta</option>
@@ -478,10 +479,10 @@
     const selEstadoPago = document.getElementById('pedEstadoPago');
     const grupoAbono = document.getElementById('grupoAbono');
     const campoAbono = document.getElementById('pedAbono');
-    const grupoMetodo = document.getElementById('grupoMetodo');
+    const campoMetodo = document.getElementById('pedMetodoPago');
     selEstadoPago.addEventListener('change', () => {
       const esAbono = selEstadoPago.value === 'Abonado';
-      grupoMetodo.classList.toggle('d-none', selEstadoPago.value === 'Pendiente');
+      campoMetodo.required = selEstadoPago.value !== 'Pendiente';
       grupoAbono.classList.toggle('d-none', !esAbono);
       campoAbono.required = esAbono;
       if (!esAbono) campoAbono.value = '';
@@ -490,7 +491,7 @@
       campoAbono.value = campoAbono.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     });
     document.getElementById('formPedido').addEventListener('reset', () => {
-      grupoMetodo.classList.add('d-none');
+      campoMetodo.required = false;
       grupoAbono.classList.add('d-none');
       campoAbono.required = false;
     });
@@ -630,6 +631,9 @@
         const esAbono = document.getElementById('pedEstadoPago').value === 'Abonado';
         const hayPago = document.getElementById('pedEstadoPago').value !== 'Pendiente';
         const metodoPago = document.getElementById('pedMetodoPago').value;
+        if (hayPago && !metodoPago) {
+          throw new Error('Selecciona el medio de pago.');
+        }
         const abono = esAbono ? Number(campoAbono.value.replace(/\./g, '')) : 0;
         if (esAbono && abono <= 0) {
           throw new Error('Indica cuánto abona el cliente.');
@@ -648,7 +652,7 @@
           fecha_ingreso: new Date().toISOString(),
           fecha_entrega_estimada: fechaEntregaUTC.toISOString(),
           ...(esAbono && { abono }),
-          ...(hayPago && { metodo_pago: metodoPago })
+          ...(metodoPago && { metodo_pago: metodoPago })
         };
 
         const { data: pedidoCreado, error: errorPedido } = await supabase
