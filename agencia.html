@@ -182,6 +182,15 @@
               </div>
             </div>
 
+            <div id="grupoMetodo" class="mb-2 d-none">
+              <label class="form-label small">Medio de pago</label>
+              <select id="pedMetodoPago" class="form-select form-select-sm">
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Tarjeta">Tarjeta</option>
+              </select>
+            </div>
+
             <div id="grupoAbono" class="mb-3 d-none">
               <label class="form-label small">¿Cuánto abona el cliente? ($)</label>
               <input type="text" id="pedAbono" class="form-control form-control-sm" inputmode="numeric" placeholder="Ej: 20.000">
@@ -263,6 +272,7 @@
               <div class="fs-3 fw-bold" id="arqEntCant">0</div>
               <div class="small">Valor de los pedidos: <strong id="arqEntTotal">$0</strong></div>
               <div class="small text-white-50" id="arqEntPago">Pagado $0 · Abonado $0 · Pendiente $0</div>
+              <div class="small mt-1" id="arqEntMetodo">Cobrado: Efectivo $0 · Transferencia $0 · Tarjeta $0</div>
             </div>
           </div>
           <div class="col-md-6">
@@ -349,7 +359,7 @@
       const { data, error } = await supabase
         .from('pedidos')
         .select(`
-          id, total, abono, estado_pago, estado_pedido, fecha_ingreso, fecha_entrega_estimada, id_agencia,
+          id, total, abono, metodo_pago, estado_pago, estado_pedido, fecha_ingreso, fecha_entrega_estimada, id_agencia,
           clientes ( nombre, documento, telefono, correo ),
           detalle_pedidos ( tipo_prenda, color, observaciones_estado, servicio_solicitado )
         `)
@@ -387,6 +397,7 @@
         <hr class="rc-sep">
         <div class="rc-fila rc-total"><span>Total</span><strong>${fmtMoneda(p.total)}</strong></div>
         <div class="rc-fila"><span>Estado de pago</span><strong>${esc(p.estado_pago || 'Pendiente')}</strong></div>
+        ${p.metodo_pago ? `<div class="rc-fila"><span>Medio de pago</span><span>${esc(p.metodo_pago)}</span></div>` : ''}
         ${p.estado_pago === 'Abonado' && Number(p.abono) > 0 ? `
         <div class="rc-fila"><span>Abono recibido</span><span>${fmtMoneda(p.abono)}</span></div>
         <div class="rc-fila"><span>Saldo pendiente</span><strong>${fmtMoneda(Number(p.total) - Number(p.abono))}</strong></div>` : ''}
@@ -467,8 +478,10 @@
     const selEstadoPago = document.getElementById('pedEstadoPago');
     const grupoAbono = document.getElementById('grupoAbono');
     const campoAbono = document.getElementById('pedAbono');
+    const grupoMetodo = document.getElementById('grupoMetodo');
     selEstadoPago.addEventListener('change', () => {
       const esAbono = selEstadoPago.value === 'Abonado';
+      grupoMetodo.classList.toggle('d-none', selEstadoPago.value === 'Pendiente');
       grupoAbono.classList.toggle('d-none', !esAbono);
       campoAbono.required = esAbono;
       if (!esAbono) campoAbono.value = '';
@@ -477,6 +490,7 @@
       campoAbono.value = campoAbono.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     });
     document.getElementById('formPedido').addEventListener('reset', () => {
+      grupoMetodo.classList.add('d-none');
       grupoAbono.classList.add('d-none');
       campoAbono.required = false;
     });
@@ -614,6 +628,8 @@
         }
 
         const esAbono = document.getElementById('pedEstadoPago').value === 'Abonado';
+        const hayPago = document.getElementById('pedEstadoPago').value !== 'Pendiente';
+        const metodoPago = document.getElementById('pedMetodoPago').value;
         const abono = esAbono ? Number(campoAbono.value.replace(/\./g, '')) : 0;
         if (esAbono && abono <= 0) {
           throw new Error('Indica cuánto abona el cliente.');
@@ -631,7 +647,8 @@
           estado_pedido: 'Recibido',
           fecha_ingreso: new Date().toISOString(),
           fecha_entrega_estimada: fechaEntregaUTC.toISOString(),
-          ...(esAbono && { abono })
+          ...(esAbono && { abono }),
+          ...(hayPago && { metodo_pago: metodoPago })
         };
 
         const { data: pedidoCreado, error: errorPedido } = await supabase
@@ -932,7 +949,7 @@
       const inicio = new Date(`${fecha}T00:00:00-05:00`);
       const fin = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
       const columnas = `
-        id, total, estado_pago, fecha_ingreso, fecha_salida,
+        id, total, abono, metodo_pago, estado_pago, fecha_ingreso, fecha_salida,
         clientes ( nombre ),
         detalle_pedidos ( tipo_prenda, color )
       `;
@@ -969,6 +986,12 @@
         `Pagado ${fmtMoneda(suma(ent, p => p.estado_pago === 'Pagado'))} · ` +
         `Abonado ${fmtMoneda(suma(ent, p => p.estado_pago === 'Abonado'))} · ` +
         `Pendiente ${fmtMoneda(suma(ent, p => p.estado_pago === 'Pendiente'))}`;
+      const cobrado = (p) => p.estado_pago === 'Pagado' ? Number(p.total || 0)
+        : p.estado_pago === 'Abonado' ? Number(p.abono || 0) : 0;
+      const porMetodo = { Efectivo: 0, Transferencia: 0, Tarjeta: 0 };
+      ent.forEach(p => { if (p.metodo_pago in porMetodo) porMetodo[p.metodo_pago] += cobrado(p); });
+      document.getElementById('arqEntMetodo').textContent =
+        `Cobrado: Efectivo ${fmtMoneda(porMetodo.Efectivo)} · Transferencia ${fmtMoneda(porMetodo.Transferencia)} · Tarjeta ${fmtMoneda(porMetodo.Tarjeta)}`;
       document.getElementById('arqSalCant').textContent = sal.length;
       document.getElementById('arqSalTotal').textContent = fmtMoneda(suma(sal));
 
