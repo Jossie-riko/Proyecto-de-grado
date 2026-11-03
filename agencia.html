@@ -138,6 +138,7 @@
                   <option value="Lavado por Kilos">Lavado por Kilos</option>
                   <option value="Planchado">Planchado</option>
                   <option value="Tintorería">Tintorería</option>
+                  <option value="Servicio Completo">Servicio Completo</option>
                 </select>
               </div>
             </div>
@@ -179,6 +180,11 @@
                   <option value="Pagado">Pagado</option>
                 </select>
               </div>
+            </div>
+
+            <div id="grupoAbono" class="mb-3 d-none">
+              <label class="form-label small">¿Cuánto abona el cliente? ($)</label>
+              <input type="text" id="pedAbono" class="form-control form-control-sm" inputmode="numeric" placeholder="Ej: 20.000">
             </div>
 
             <button type="submit" class="btn btn-success w-100 fw-bold btn-sm">Crear Orden y Recibir Prendas</button>
@@ -349,7 +355,7 @@
       const { data, error } = await supabase
         .from('pedidos')
         .select(`
-          id, total, estado_pago, estado_pedido, fecha_ingreso, fecha_entrega_estimada, id_agencia,
+          id, total, abono, estado_pago, estado_pedido, fecha_ingreso, fecha_entrega_estimada, id_agencia,
           clientes ( nombre, documento, telefono, correo ),
           detalle_pedidos ( tipo_prenda, color, observaciones_estado, servicio_solicitado )
         `)
@@ -387,6 +393,9 @@
         <hr class="rc-sep">
         <div class="rc-fila rc-total"><span>Total</span><strong>${fmtMoneda(p.total)}</strong></div>
         <div class="rc-fila"><span>Estado de pago</span><strong>${esc(p.estado_pago || 'Pendiente')}</strong></div>
+        ${p.estado_pago === 'Abonado' && Number(p.abono) > 0 ? `
+        <div class="rc-fila"><span>Abono recibido</span><span>${fmtMoneda(p.abono)}</span></div>
+        <div class="rc-fila"><span>Saldo pendiente</span><strong>${fmtMoneda(Number(p.total) - Number(p.abono))}</strong></div>` : ''}
         <hr class="rc-sep">
         <p class="rc-nota">Conserve este recibo: lo necesitará para retirar sus prendas.<br>Gracias por confiar en TexClean.</p>
       `;
@@ -447,6 +456,47 @@
     document.getElementById('btnReciboEnviar').addEventListener('click', enviarRecibo);
     document.getElementById('btnReciboCerrar').addEventListener('click', () => {
       document.getElementById('reciboOverlay').classList.add('d-none');
+    });
+
+    // ---------- Fecha de entrega: no permitir fechas pasadas (hora de Bogotá) ----------
+    const campoFechaEntrega = document.getElementById('pedFechaEntrega');
+    function actualizarMinEntrega() {
+      campoFechaEntrega.min = new Date()
+        .toLocaleString('sv-SE', { timeZone: 'America/Bogota' })
+        .slice(0, 16)
+        .replace(' ', 'T');
+    }
+    actualizarMinEntrega();
+    campoFechaEntrega.addEventListener('focus', actualizarMinEntrega);
+
+    // ---------- Abono: aparece solo si el estado de pago es "Abonado" ----------
+    const selEstadoPago = document.getElementById('pedEstadoPago');
+    const grupoAbono = document.getElementById('grupoAbono');
+    const campoAbono = document.getElementById('pedAbono');
+    selEstadoPago.addEventListener('change', () => {
+      const esAbono = selEstadoPago.value === 'Abonado';
+      grupoAbono.classList.toggle('d-none', !esAbono);
+      campoAbono.required = esAbono;
+      if (!esAbono) campoAbono.value = '';
+    });
+    campoAbono.addEventListener('input', () => {
+      campoAbono.value = campoAbono.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    });
+    document.getElementById('formPedido').addEventListener('reset', () => {
+      grupoAbono.classList.add('d-none');
+      campoAbono.required = false;
+    });
+
+    // ---------- Avisos que desaparecen a los 5 segundos ----------
+    ['alertCliente', 'alertPedido', 'alertSalida'].forEach(id => {
+      const el = document.getElementById(id);
+      let temporizador;
+      new MutationObserver(() => {
+        clearTimeout(temporizador);
+        if (!el.classList.contains('d-none')) {
+          temporizador = setTimeout(() => el.classList.add('d-none'), 5000);
+        }
+      }).observe(el, { attributes: true, attributeFilter: ['class'] });
     });
 
     // ---------- Menú ----------
@@ -565,6 +615,18 @@
         if (Number.isNaN(fechaEntregaUTC.getTime())) {
           throw new Error('La fecha de entrega estipulada no es válida.');
         }
+        if (fechaEntregaUTC.getTime() < Date.now() - 60000) {
+          throw new Error('La fecha de entrega no puede ser anterior a la fecha y hora actual.');
+        }
+
+        const esAbono = document.getElementById('pedEstadoPago').value === 'Abonado';
+        const abono = esAbono ? Number(campoAbono.value.replace(/\./g, '')) : 0;
+        if (esAbono && abono <= 0) {
+          throw new Error('Indica cuánto abona el cliente.');
+        }
+        if (esAbono && abono >= totalPedido) {
+          throw new Error('El abono debe ser menor al costo total. Si pagó todo, elige «Pagado».');
+        }
 
         const datosPedido = {
           id_cliente: parseInt(document.getElementById('selectCliente').value, 10),
@@ -574,7 +636,8 @@
           estado_pago: document.getElementById('pedEstadoPago').value,
           estado_pedido: 'Recibido',
           fecha_ingreso: new Date().toISOString(),
-          fecha_entrega_estimada: fechaEntregaUTC.toISOString()
+          fecha_entrega_estimada: fechaEntregaUTC.toISOString(),
+          ...(esAbono && { abono })
         };
 
         const { data: pedidoCreado, error: errorPedido } = await supabase
