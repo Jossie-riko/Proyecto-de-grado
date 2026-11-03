@@ -266,6 +266,11 @@
         </div>
         <div id="alertArqueo" class="alert d-none py-2 fs-7" role="alert"></div>
 
+        <div class="p-3 rounded border border-primary mb-3">
+          <div class="small text-white-50">Recaudo del día por medio de pago</div>
+          <div class="fw-bold fs-5" id="arqRecaudo">Efectivo $0 · Transferencia $0 · Tarjeta $0 · Total $0</div>
+        </div>
+
         <div class="row g-3 mb-4">
           <div class="col-md-6">
             <div class="p-3 rounded border border-success">
@@ -282,6 +287,7 @@
               <div class="fs-3 fw-bold" id="arqSalCant">0</div>
               <div class="small">Valor de los pedidos: <strong id="arqSalTotal">$0</strong></div>
               <div class="small text-white-50">Pedidos que salieron en la fecha elegida</div>
+              <div class="small mt-1" id="arqSalMetodo">Cobrado al entregar: Efectivo $0 · Transferencia $0 · Tarjeta $0</div>
             </div>
           </div>
         </div>
@@ -881,7 +887,17 @@
         accion = `<div class="alert alert-warning py-2 mb-0">Esta orden todavía no está lista para entregar (estado actual: ${esc(estado)}). Avanza su estado en «Recibir prendas» y vuelve a buscarla.</div>`;
       } else {
         accion = `
-          ${saldo > 0 ? `<div class="alert alert-warning py-2">El cliente debe ${fmtMoneda(saldo)} de esta orden.</div>` : ''}
+          ${saldo > 0 ? `
+            <div class="alert alert-warning py-2">El cliente debe pagar <strong>${fmtMoneda(saldo)}</strong> para llevarse las prendas.</div>
+            <div class="mb-3" style="max-width:320px">
+              <label for="salidaMetodo" class="form-label small">¿Con qué medio de pago va a pagar?</label>
+              <select id="salidaMetodo" class="form-select form-select-sm">
+                <option value="">-- Seleccionar --</option>
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Tarjeta">Tarjeta</option>
+              </select>
+            </div>` : '<div class="small text-white-50 mb-2">Esta orden ya está pagada por completo.</div>'}
           <p class="fw-bold mb-2">¿Quieres darle salida a esta orden?</p>
           <div class="d-flex gap-2">
             <button type="button" id="btnConfirmarSalida" class="btn btn-success btn-sm fw-bold">Sí, dar salida</button>
@@ -909,18 +925,33 @@
 
       const btnOk = document.getElementById('btnConfirmarSalida');
       if (btnOk) {
-        btnOk.addEventListener('click', () => registrarSalida(p, btnOk));
+        btnOk.addEventListener('click', () => registrarSalida(p, saldo, btnOk));
         document.getElementById('btnCancelarSalida').addEventListener('click', limpiarSalida);
       }
     }
 
-    async function registrarSalida(p, btn) {
+    async function registrarSalida(p, saldo, btn) {
+      const selMetodo = document.getElementById('salidaMetodo');
+      const metodo = selMetodo ? selMetodo.value : '';
+      if (saldo > 0 && !metodo) {
+        mostrarAlerta('alertSalida', 'Selecciona el medio de pago para entregar la orden.', 'warning');
+        selMetodo.focus();
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Registrando...';
       try {
+        const cambios = { estado_pedido: 'Entregado', fecha_salida: new Date().toISOString() };
+        if (saldo > 0) {
+          cambios.estado_pago = 'Pagado';
+          cambios.pago_salida = saldo;
+          cambios.metodo_pago_salida = metodo;
+        }
+
         const { data, error } = await supabase
           .from('pedidos')
-          .update({ estado_pedido: 'Entregado', fecha_salida: new Date().toISOString() })
+          .update(cambios)
           .eq('id', p.id)
           .eq('estado_pedido', 'Listo para Entrega')
           .select();
@@ -929,8 +960,13 @@
           throw new Error('La orden cambió de estado. Búscala de nuevo.');
         }
 
+        const numero = String(p.id).padStart(6, '0');
         limpiarSalida();
-        mostrarAlerta('alertSalida', `Orden N° ${String(p.id).padStart(6, '0')} entregada con éxito.`, 'success');
+        mostrarAlerta('alertSalida',
+          saldo > 0
+            ? `Orden N° ${numero} entregada. Pago de ${fmtMoneda(saldo)} registrado en ${metodo}.`
+            : `Orden N° ${numero} entregada con éxito.`,
+          'success');
         await cargarTablaPedidos();
       } catch (err) {
         console.error('Error al registrar la salida:', err);
@@ -953,7 +989,7 @@
       const inicio = new Date(`${fecha}T00:00:00-05:00`);
       const fin = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
       const columnas = `
-        id, total, abono, metodo_pago, estado_pago, fecha_ingreso, fecha_salida,
+        id, total, abono, metodo_pago, pago_salida, metodo_pago_salida, estado_pago, fecha_ingreso, fecha_salida,
         clientes ( nombre ),
         detalle_pedidos ( tipo_prenda, color )
       `;
@@ -990,12 +1026,24 @@
         `Pagado ${fmtMoneda(suma(ent, p => p.estado_pago === 'Pagado'))} · ` +
         `Abonado ${fmtMoneda(suma(ent, p => p.estado_pago === 'Abonado'))} · ` +
         `Pendiente ${fmtMoneda(suma(ent, p => p.estado_pago === 'Pendiente'))}`;
-      const cobrado = (p) => p.estado_pago === 'Pagado' ? Number(p.total || 0)
+      const cobrado = (p) => Number(p.pago_salida) > 0 ? Number(p.total || 0) - Number(p.pago_salida)
+        : p.estado_pago === 'Pagado' ? Number(p.total || 0)
         : p.estado_pago === 'Abonado' ? Number(p.abono || 0) : 0;
       const porMetodo = { Efectivo: 0, Transferencia: 0, Tarjeta: 0 };
       ent.forEach(p => { if (p.metodo_pago in porMetodo) porMetodo[p.metodo_pago] += cobrado(p); });
       document.getElementById('arqEntMetodo').textContent =
         `Cobrado: Efectivo ${fmtMoneda(porMetodo.Efectivo)} · Transferencia ${fmtMoneda(porMetodo.Transferencia)} · Tarjeta ${fmtMoneda(porMetodo.Tarjeta)}`;
+      const salMetodo = { Efectivo: 0, Transferencia: 0, Tarjeta: 0 };
+      sal.forEach(p => { if (p.metodo_pago_salida in salMetodo) salMetodo[p.metodo_pago_salida] += Number(p.pago_salida || 0); });
+      document.getElementById('arqSalMetodo').textContent =
+        `Cobrado al entregar: Efectivo ${fmtMoneda(salMetodo.Efectivo)} · Transferencia ${fmtMoneda(salMetodo.Transferencia)} · Tarjeta ${fmtMoneda(salMetodo.Tarjeta)}`;
+      const recaudo = {
+        Efectivo: porMetodo.Efectivo + salMetodo.Efectivo,
+        Transferencia: porMetodo.Transferencia + salMetodo.Transferencia,
+        Tarjeta: porMetodo.Tarjeta + salMetodo.Tarjeta
+      };
+      document.getElementById('arqRecaudo').textContent =
+        `Efectivo ${fmtMoneda(recaudo.Efectivo)} · Transferencia ${fmtMoneda(recaudo.Transferencia)} · Tarjeta ${fmtMoneda(recaudo.Tarjeta)} · Total ${fmtMoneda(recaudo.Efectivo + recaudo.Transferencia + recaudo.Tarjeta)}`;
       document.getElementById('arqSalCant').textContent = sal.length;
       document.getElementById('arqSalTotal').textContent = fmtMoneda(suma(sal));
 
@@ -1019,7 +1067,7 @@
           <td>#${p.id}</td>
           <td>${p.clientes?.nombre || 'Sin Cliente'}</td>
           <td>${d.tipo_prenda ? `${d.tipo_prenda} (${d.color || ''})` : 'Sin detalle'}</td>
-          <td>${fmtMoneda(p.total)} <br><span class="badge bg-secondary">${p.estado_pago || 'Pendiente'}</span></td>
+          <td>${fmtMoneda(p.total)} <br><span class="badge bg-secondary">${p.estado_pago || 'Pendiente'}</span>${tipo === 'Salida' && Number(p.pago_salida) > 0 ? `<br><small>Cobró ${fmtMoneda(p.pago_salida)} · ${esc(p.metodo_pago_salida)}</small>` : ''}</td>
         `;
         tbody.appendChild(fila);
       });
